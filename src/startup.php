@@ -12,7 +12,7 @@ function loadTwig()
 {
     // Initialize twig
     Twig_Autoloader::register();
-    $loader = new Twig_Loader_Filesystem(__DIR__ . '/../src/templates');
+    $loader = new Twig_Loader_Filesystem(__DIR__ . '/templates');
     $twig = new Twig_Environment($loader, array());
 
     return $twig;
@@ -20,8 +20,15 @@ function loadTwig()
 
 function index_handler()
 {
+    var_dump($_POST);
     $twig = loadTwig();
-    echo $twig->render('index.html', array('the' => 'variables', 'go' => 'here'));
+    echo $twig->render('contacts_list.html', array('the' => 'variables', 'go' => 'here'));
+}
+
+function contact_handler($id)
+{
+    $twig = loadTwig();
+    echo $twig->render('contact_manage.html', array('the' => 'variables', 'go' => 'here'));
 }
 
 function about_handler()
@@ -32,7 +39,8 @@ function about_handler()
 
 $dispatcher = \FastRoute\simpleDispatcher(function (\FastRoute\RouteCollector $r) {
     // Add routes
-    $r->addRoute('GET', '/', 'index_handler');
+    $r->addRoute(['GET', 'POST'], '/', 'index_handler');
+    $r->addRoute('GET', '/manage[/{id}]', 'contact_handler');
     $r->addRoute('GET', '/about', 'about_handler');
 });
 
