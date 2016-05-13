@@ -8,6 +8,16 @@ require __DIR__ . '/../vendor/autoload.php';
 
 error_reporting(E_ALL);
 
+/**
+*   Initialize DB.
+*/
+DB::$user = 'root';
+DB::$password = 'password';
+DB::$dbName = 'asg';
+
+/**
+*   Twig templating functions.
+*/
 function loadTwig()
 {
     // Initialize twig
@@ -20,15 +30,53 @@ function loadTwig()
 
 function index_handler()
 {
-    var_dump($_POST);
+    $parse = [];
+
+    // Query all contacts
+    $parse['contacts'] = DB::query("SELECT * FROM contacts");
+
+    // Parse query string
+    parse_str($_SERVER['QUERY_STRING'], $query);
+    $parse['success'] = $query['success'];
+
+    // Render template
     $twig = loadTwig();
-    echo $twig->render('contacts_list.html', array('the' => 'variables', 'go' => 'here'));
+    echo $twig->render('contacts_list.html', $parse);
 }
 
 function contact_handler($id)
 {
+    var_dump($_FILES);
+    var_dump($_POST);
+
+    // If $_POST, process first.
+    if (!empty($_POST)) {
+        DB::insertUpdate('contacts', array(
+            'id' => $_POST['id'],
+            'first_name' => $_POST['first_name'],
+            'surname' => $_POST['surname'],
+            'cellphone' => $_POST['cellphone'],
+            'email' => $_POST['email']
+        ));
+
+        header("Location: /?success=1");
+    }
+
+    // Parse query string
+    parse_str($_SERVER['QUERY_STRING'], $query);
+
+    // Load normal view page.
+    $parse = [];
     $twig = loadTwig();
-    echo $twig->render('contact_manage.html', array('the' => 'variables', 'go' => 'here'));
+
+    if (!empty($query['id'])) {
+        $parse['contact'] = DB::queryFirstRow("SELECT * FROM contacts WHERE id = %d", $query['id']);
+        $parse['submit_button_text'] = 'Update';
+    } else {
+        $parse['submit_button_text'] = 'Add';
+    }
+
+    echo $twig->render('contact_manage.html', $parse);
 }
 
 function about_handler()
@@ -40,7 +88,7 @@ function about_handler()
 $dispatcher = \FastRoute\simpleDispatcher(function (\FastRoute\RouteCollector $r) {
     // Add routes
     $r->addRoute(['GET', 'POST'], '/', 'index_handler');
-    $r->addRoute('GET', '/manage[/{id}]', 'contact_handler');
+    $r->addRoute(['GET', 'POST'], '/manage', 'contact_handler');
     $r->addRoute('GET', '/about', 'about_handler');
 });
 
