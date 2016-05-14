@@ -18,7 +18,11 @@
 */
 require __DIR__ . '/../vendor/autoload.php';
 
-error_reporting(E_ALL);
+/**
+*   Import the Intervention Image Manager Class.
+*   This is used to create the thumbnails of profile pics.
+*/
+use Intervention\Image\ImageManager;
 
 /**
 *   Initialize DB.
@@ -59,6 +63,16 @@ function parseQueryString($query_string)
     return $query_array;
 }
 
+function checkProfilePhoto($contact)
+{
+    if (empty($contact['profile_filename'])) {
+        $contact['profile_filename'] = 'generic.png';
+        $contact['thumb_filename'] = 'generic_thumb.png';
+    }
+
+    return $contact;
+}
+
 /**
 *   Handles the index page.
 *
@@ -75,6 +89,12 @@ function indexHandler()
 
     // Query all contacts
     $parse['contacts'] = DB::query("SELECT * FROM contacts ORDER BY first_name, surname DESC");
+
+    // Check profile photos
+    $len = count($parse['contacts']);
+    for ($i = 0; $i < $len; $i++) {
+        $parse['contacts'][$i] = checkProfilePhoto($parse['contacts'][$i]);
+    }
 
     // Parse query string
     $query_array = parseQueryString($_SERVER['QUERY_STRING']);
@@ -102,26 +122,95 @@ function indexHandler()
     echo $twig->render('contacts_list.html', $parse);
 }
 
+function uploadProfilePic($file, $id)
+{
+    $file_extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $target_dir = __DIR__ . '/../public/images/profile_pics';
+    $target_filename = $id . '.' . $file_extension;
+    $target_file_path = $target_dir . '/' . $target_filename;
+    $valid = 1;
+
+    $check_image = getimagesize($file["tmp_name"]);
+    if ($check_image === false) {
+        $valid = 0;
+    }
+
+    $valid_extensions = ['jpg', 'gif', 'png'];
+    $found_extension = false;
+    foreach ($valid_extensions as $ext) {
+        if ($file_extension == $ext) {
+            $found_extension = true;
+            break;
+        }
+    }
+    if (!$found_extension) {
+        $valid = 0;
+    }
+
+    if (!$valid) {
+        return false;
+    } else {
+        if (move_uploaded_file($file['tmp_name'], $target_file_path)) {
+            $old_files = DB::queryFirstRow("SELECT profile_filename, thumb_filename FROM contacts WHERE id = " . $id);
+
+            // Remove old profile files
+            $old_file_path = $target_dir . '/' . $old_files['profile_filename'];
+            if ($old_files['profile_filename'] != $target_filename && file_exists($old_file_path)) {
+                unlink($old_file_path);
+            }
+            $old_thumb_path = $target_dir . '/' . $old_files['thumb_filename'];
+            if (file_exists($old_thumb_path)) {
+                unlink($old_thumb_path);
+            }
+
+            // Create a thumbnail from the image.
+            $manager = new ImageManager(array('driver' => 'gd'));
+            $image = $manager->make($target_file_path)->resize(25, 25);
+            $thumb_filename = $id . '_thumb.' . $file_extension;
+            $thumb_file_path = $target_dir . '/' . $thumb_filename;
+            $image->save($thumb_file_path);
+
+            // Update contact profile path
+            DB::update('contacts',
+                array(
+                    'profile_filename' => $target_filename,
+                    'thumb_filename' => $thumb_filename
+                ),
+                'id = ' . $id
+            );
+
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+
 /**
 *   Handles the adding and updating of contacts.
 */
 function contactHandler()
 {
-    //var_dump($_FILES);
     $success = 0;
 
     // If $_POST, process first.
     if (!empty($_POST)) {
-        // Start DB transaction for inserts and updates.
+        // Start DB transaction.
         DB::startTransaction();
         try {
-            DB::insertUpdate('contacts123', array(
+            // Do insert or update.
+            DB::insertUpdate('contacts', array(
                 'id' => $_POST['id'],
                 'first_name' => $_POST['first_name'],
                 'surname' => $_POST['surname'],
                 'cellphone' => $_POST['cellphone'],
                 'email' => $_POST['email']
             ));
+
+            // Handle uploaded profile pic.
+            if (!empty($_FILES)) {
+                uploadProfilePic($_FILES['profile_pic'], $_POST['id']);
+            }
 
             DB::commit();
             $success = 1;
@@ -149,6 +238,7 @@ function contactHandler()
         $parse['contact'] = DB::queryFirstRow("SELECT * FROM contacts WHERE id = %d", $query_array['id']);
         $parse['submit_button_text'] = 'Update';
     } else {
+        $parse['contact'] = [];
         $parse['submit_button_text'] = 'Add';
     }
 

@@ -11,3 +11,12 @@
 a.glyphicon {
     cursor: pointer;
 }
+
+.profile_thumbnail {
+    margin-right: 15px;
+}
+
+.address_textarea {
+    width: 400px;
+    height: 150px;
+}

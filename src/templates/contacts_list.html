@@ -18,9 +18,9 @@
     <tbody>
         {% for contact in contacts %}
             <tr>
-                <td>{{ contact.first_name|e }} {{ contact.surname|e }}</td>
+                <td><img src="images/profile_pics/{{ contact.thumb_filename }}" class="profile_thumbnail" />{{ contact.first_name|e }} {{ contact.surname|e }}</td>
                 <td>{{ contact.cellphone|e }}</td>
-                <td>{{ contact.email|e }}</td>
+                <td><a href="mailto:{{ contact.email|e }}">{{ contact.email|e }}</td>
                 <td>
                     <a class="glyphicon glyphicon-edit" href="/manage?id={{ contact.id }}"></a>
                     <a class="glyphicon glyphicon-remove" onclick="deleteContact({{ contact.id }})"></a>
