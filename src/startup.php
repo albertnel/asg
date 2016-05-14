@@ -19,12 +19,6 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 /**
-*   Import the Intervention Image Manager Class.
-*   This is used to create the thumbnails of profile pics.
-*/
-use Intervention\Image\ImageManager;
-
-/**
 *   Include other application classes and files.
 */
 require_once __DIR__ . '/utils.php';

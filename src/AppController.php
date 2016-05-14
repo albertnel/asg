@@ -9,6 +9,12 @@
 *   @author Albert Nel
 */
 
+/**
+*   Import the Intervention Image Manager Class.
+*   This is used to create the thumbnails of profile pics.
+*/
+use Intervention\Image\ImageManager;
+
 class AppController
 {
     /**
@@ -134,8 +140,8 @@ class AppController
                 ));
 
                 // Handle uploaded profile pic.
-                if (!empty($_FILES['tmp_name'])) {
-                    $this->uploadProfilePic($_FILES['profile_pic'], $_POST['id']);
+                if (!empty($_FILES['profile_pic']['tmp_name'])) {
+                    $this->uploadProfilePic($_FILES['profile_pic'], (!empty($_POST['id']) ? $_POST['id'] : DB::insertId()));
                 }
 
                 DB::commit();
@@ -193,7 +199,7 @@ class AppController
             $valid = 0;
         }
 
-        $valid_extensions = ['jpg', 'gif', 'png'];
+        $valid_extensions = ['jpg', 'jpeg', 'gif', 'png'];
         $found_extension = false;
         foreach ($valid_extensions as $ext) {
             if ($file_extension == $ext) {
