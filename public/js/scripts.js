@@ -1,7 +1,3 @@
-$("#back_button").click(function() {
-    window.location = "/";
-});
-
 function deleteContact(id)
 {
     $.ajax({
@@ -12,3 +8,18 @@ function deleteContact(id)
         }
     });
 }
+
+$(document).ready(function() {
+    $("#back_button").click(function() {
+        window.location = "/";
+    });
+
+    $('#filter').keyup(function () {
+        var rex = new RegExp($(this).val(), 'i');
+        $('.searchable tr').hide();
+        $('.searchable tr').filter(function () {
+            return rex.test($(this).text());
+        }).show();
+    })
+});
+
