@@ -3,8 +3,9 @@ function deleteContact(id)
     $.ajax({
         type: "DELETE",
         url: "/manage?id=" + id,
-        success: function(msg) {
-            window.location = "/";
+        success: function(data) {
+            var json = JSON.parse(data);
+            window.location = "/?deleted=" + json.success;
         }
     });
 }

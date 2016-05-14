@@ -25,18 +25,18 @@ require __DIR__ . '/../vendor/autoload.php';
 use Intervention\Image\ImageManager;
 
 /**
+*   Include other application classes and files.
+*/
+require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/AppController.php';
+
+/**
 *   Initialize DB.
 */
 DB::$user = 'root';
 DB::$password = 'password';
 DB::$dbName = 'asg';
 DB::$error_handler = 'error_handler';
-
-function error_handler($error)
-{
-    $e = new MeekroDBException($error['error'], $error['query'], $error['type']);
-    throw $e;
-}
 
 /**
 *   Initialize Twig templating engine.
@@ -52,242 +52,64 @@ function loadTwig()
 }
 
 /**
-*   Parse the $_SERVER['QUERY_STRING'] variable.
-*
-*   @param string $query_string The query string
-*   @return array The query string converted to a key/value array
-*/
-function parseQueryString($query_string)
-{
-    parse_str($query_string, $query_array);
-    return $query_array;
-}
-
-function checkProfilePhoto($contact)
-{
-    if (empty($contact['profile_filename'])) {
-        $contact['profile_filename'] = 'generic.png';
-        $contact['thumb_filename'] = 'generic_thumb.png';
-    }
-
-    return $contact;
-}
-
-/**
-*   Handles the index page.
-*
-*   This function queries the DB for all contacts in alphabetical order.
-*
-*   It also handles an alert message to indicate whethere a contact was
-*   saved successfully or not.
-*
-*   Finally it renders the Twig template.
+* Route handlers.
 */
 function indexHandler()
 {
-    $parse = [];
-
-    // Query all contacts
-    $parse['contacts'] = DB::query("SELECT * FROM contacts ORDER BY first_name, surname DESC");
-
-    // Check profile photos
-    $len = count($parse['contacts']);
-    for ($i = 0; $i < $len; $i++) {
-        $parse['contacts'][$i] = checkProfilePhoto($parse['contacts'][$i]);
-    }
-
-    // Parse query string
-    $query_array = parseQueryString($_SERVER['QUERY_STRING']);
-
-    // Configure alert if necessarry
-    if (array_key_exists('success', $query_array)) {
-        if ($query_array['success'] == 1) {
-            $alert['class'] = 'alert-success';
-            $alert['headline'] = 'Success!';
-            $alert['message'] = 'Contact saved successfully.';
-        } else if ($query_array['success'] == 0) {
-            $alert['class'] = 'alert-danger';
-            $alert['headline'] = 'Error!';
-            $alert['message'] = 'Contact could not be saved.';
-        } else {
-            $alert['class'] = 'hidden';
-        }
-    } else {
-        $alert['class'] = 'hidden';
-    }
-    $parse['alert'] = $alert;
-
-    // Render template
-    $twig = loadTwig();
-    echo $twig->render('contacts_list.html', $parse);
+    $app = new AppController();
+    $app->displayIndexPage();
 }
 
-function uploadProfilePic($file, $id)
+function manageContactHandler()
 {
-    $file_extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $target_dir = __DIR__ . '/../public/images/profile_pics';
-    $target_filename = $id . '.' . $file_extension;
-    $target_file_path = $target_dir . '/' . $target_filename;
-    $valid = 1;
+    $app = new AppController();
+    $success = $app->handleContactPage();
 
-    $check_image = getimagesize($file["tmp_name"]);
-    if ($check_image === false) {
-        $valid = 0;
-    }
-
-    $valid_extensions = ['jpg', 'gif', 'png'];
-    $found_extension = false;
-    foreach ($valid_extensions as $ext) {
-        if ($file_extension == $ext) {
-            $found_extension = true;
-            break;
-        }
-    }
-    if (!$found_extension) {
-        $valid = 0;
-    }
-
-    if (!$valid) {
-        return false;
-    } else {
-        if (move_uploaded_file($file['tmp_name'], $target_file_path)) {
-            $old_files = DB::queryFirstRow("SELECT profile_filename, thumb_filename FROM contacts WHERE id = " . $id);
-
-            // Remove old profile files
-            $old_file_path = $target_dir . '/' . $old_files['profile_filename'];
-            if ($old_files['profile_filename'] != $target_filename && file_exists($old_file_path)) {
-                unlink($old_file_path);
-            }
-            $old_thumb_path = $target_dir . '/' . $old_files['thumb_filename'];
-            if (file_exists($old_thumb_path)) {
-                unlink($old_thumb_path);
-            }
-
-            // Create a thumbnail from the image.
-            $manager = new ImageManager(array('driver' => 'gd'));
-            $image = $manager->make($target_file_path)->resize(25, 25);
-            $thumb_filename = $id . '_thumb.' . $file_extension;
-            $thumb_file_path = $target_dir . '/' . $thumb_filename;
-            $image->save($thumb_file_path);
-
-            // Update contact profile path
-            DB::update('contacts',
-                array(
-                    'profile_filename' => $target_filename,
-                    'thumb_filename' => $thumb_filename
-                ),
-                'id = ' . $id
-            );
-
-            return true;
-        } else {
-            return false;
-        }
-    }
+    header("Location: /?success=" . $success);
 }
 
-/**
-*   Handles the adding and updating of contacts.
-*/
-function contactHandler()
-{
-    $success = 0;
-
-    // If $_POST, process first.
-    if (!empty($_POST)) {
-        // Start DB transaction.
-        DB::startTransaction();
-        try {
-            // Do insert or update.
-            DB::insertUpdate('contacts', array(
-                'id' => $_POST['id'],
-                'first_name' => $_POST['first_name'],
-                'surname' => $_POST['surname'],
-                'cellphone' => $_POST['cellphone'],
-                'email' => $_POST['email']
-            ));
-
-            // Handle uploaded profile pic.
-            if (!empty($_FILES)) {
-                uploadProfilePic($_FILES['profile_pic'], $_POST['id']);
-            }
-
-            DB::commit();
-            $success = 1;
-
-        // Catch exception if something went wrong.
-        } catch (Exception $e) {
-            // Roll back transaction.
-            DB::rollback();
-        }
-
-        header("Location: /?success=" . $success);
-    }
-
-    // Parse query string
-    $query_array = [];
-    if ($_SERVER['QUERY_STRING']) {
-        $query_array = parseQueryString($_SERVER['QUERY_STRING']);
-    }
-
-    // Load normal view page.
-    $parse = [];
-    $twig = loadTwig();
-
-    if (!empty($query_array['id'])) {
-        $parse['contact'] = DB::queryFirstRow("SELECT * FROM contacts WHERE id = %d", $query_array['id']);
-        $parse['submit_button_text'] = 'Update';
-    } else {
-        $parse['contact'] = [];
-        $parse['submit_button_text'] = 'Add';
-    }
-
-    echo $twig->render('contact_manage.html', $parse);
-}
-
-/**
-*   Handles the deleting of a contact.
-*/
 function deleteContactHandler()
 {
-    // Parse query string
-    $query_array = parseQueryString($_SERVER['QUERY_STRING']);
+    $app = new AppController();
+    $deleted = $app->deleteContact();
 
-    // Delete contact
-    try {
-        DB::delete('contacts', "id=%d", $query_array['id']);
-    } catch (MeekroDBException $e) {
-        var_dump($e);
-    }
+    echo json_encode(array('deleted' => $deleted));
 }
 
-/**
-*   Handles the about page.
-*/
 function aboutHandler()
 {
     $twig = loadTwig();
-    echo $twig->render('about.html', array('the' => 'variables', 'go' => 'here'));
+    echo $twig->render('about.html');
 }
 
+/**
+*   Configure routes for the app.
+*/
 $dispatcher = \FastRoute\simpleDispatcher(function (\FastRoute\RouteCollector $r) {
     // Add routes
     $r->addRoute(['GET', 'POST'], '/', 'indexHandler');
-    $r->addRoute(['GET', 'POST'], '/manage', 'contactHandler');
+    $r->addRoute(['GET', 'POST'], '/manage', 'manageContactHandler');
     $r->addRoute('DELETE', '/manage', 'deleteContactHandler');
     $r->addRoute('GET', '/about', 'aboutHandler');
 });
 
-// Fetch method and URI from somewhere
+/**
+*   Get the HTTP method and URI.
+*/
 $httpMethod = $_SERVER['REQUEST_METHOD'];
 $uri = $_SERVER['REQUEST_URI'];
 
-// Strip query string (?foo=bar) and decode URI
+/**
+*   Strip query string and decode URI.
+*/
 if (false !== $pos = strpos($uri, '?')) {
     $uri = substr($uri, 0, $pos);
 }
 $uri = rawurldecode($uri);
 
+/**
+*   Dispatch route.
+*/
 $routeInfo = $dispatcher->dispatch($httpMethod, $uri);
 switch ($routeInfo[0]) {
     case \FastRoute\Dispatcher::NOT_FOUND:
